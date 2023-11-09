@@ -7,6 +7,8 @@ if(ARCH_LINUX)
     file(GLOB_RECURSE SRC "ropen.cpp")
     add_executable(ropen ${SRC})
 
+    target_link_libraries(ropen libtpp)
+
     if(INSTALL STREQUAL ropen)
         install(TARGETS ropen DESTINATION bin COMPONENT ropen)
     endif()

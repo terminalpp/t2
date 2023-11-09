@@ -1,5 +1,7 @@
 #include <thread>
-#include "helpers/helpers_pty.h"
+#include "libtpp/pty.h"
+
+using namespace tpp;
 
 int main() {
 

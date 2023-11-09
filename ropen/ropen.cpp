@@ -2,7 +2,7 @@
 #include <string>
 
 #include "helpers/helpers.h"
-#include "helpers/helpers_pty.h"
+#include "libtpp/pty.h"
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char * argv[]) {
 
