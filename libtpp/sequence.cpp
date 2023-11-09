@@ -98,6 +98,71 @@ namespace tpp {
         }
     }
 
+    std::optional<OSCSequence> OSCSequence::Parse(char const * & buffer, char const * end) {
+        if (buffer == end)
+            return std::nullopt;
+        char const * x = buffer;
+        try {
+            if (*x != '\033')
+                throw SequenceError{STR("Expected OSC sequence start (\\033, ESC) but " << PRETTY(*x) << "found")}; 
+            ++x;
+            if (x == end)
+                return std::nullopt;
+            if (*x != ']')
+                throw SequenceError{STR("Expected OSC Sequence start ESC ], but ESC " << PRETTY(*x) << "found")};
+            ++x;
+            int id = 0;
+            bool idParsed = false;
+            while (true) {
+                if (x == end)
+                    return std::nullopt;
+                if (!isDecimalDigit(*x))
+                    break;
+                id = id * 10 + (*(x++) - '0');
+                idParsed = true;                    
+            }
+            if (*x != ';')
+                throw SequenceError{STR("Expected semicolon after OSC id, but " << PRETTY(*x) << " found")};
+            ++x;
+            // now parse the string payload(s), which can be terminated by either BEL, or ST
+            OSCSequence result;
+            if (idParsed)
+                result.id = id;
+            char const * valueStart = x;
+            auto addPayload = [&](char const * valueEnd){
+                result.values.push_back(std::string{valueStart, static_cast<size_t>(valueEnd - valueStart)});
+                valueStart = x;
+            };
+            while (true) {
+                if (x == end)
+                    return std::nullopt;
+                switch (* x++) {
+                    case ';':
+                        addPayload(x - 1);
+                        break;
+                    case '\b':
+                        addPayload(x - 1);
+                        buffer = x;
+                        return result; 
+                    case '\033':
+                        if (x == end)
+                            return std::nullopt;
+                        if (*x == '\\') {
+                            addPayload(x - 1);
+                            ++x;
+                            return result;
+                        }
+                        // fallthorugh to default case
+                    default:
+                        break;
+                }
+            }
+        } catch (...) {
+            buffer = x;
+            throw;
+        }
+    }
+
     std::optional<Sequence> ParseSequence(char const * & buffer, char const * end) {
         if (buffer + 3 <= end) {
             if (buffer[1] == '[') {
@@ -118,13 +183,26 @@ namespace tpp {
                     switch (seq->suffix()) {
                         #define CSI0(_, NAME, SUFFIX) case SUFFIX: return NAME{std::move(seq.value())}; 
                         #define CSI1(_, NAME, SUFFIX, ...) case SUFFIX: return NAME{std::move(seq.value())}; 
+                        #define CSI2(_, NAME, SUFFIX, ...) case SUFFIX: return NAME{std::move(seq.value())}; 
                         #include "sequences.inc.h"
                         default:
                             return seq.value();
                     }
                 }
             } else if (buffer[1] == ']') {
-                NOT_IMPLEMENTED; // OSR
+                auto seq = OSCSequence::Parse(buffer, end);
+                if (!seq.has_value())
+                    return std::nullopt;
+                if (seq->id.has_value()) {
+                    switch (seq->id.value()) {
+                        #define OSC1(_, NAME, ID, ...) case ID: return NAME{std::move(seq.value())};
+                        #define OSC2(_, NAME, ID, ...) case ID: return NAME{std::move(seq.value())};
+                        #include "sequences.inc.h"
+                        default:
+                            break;
+                    }
+                }
+                return seq.value();
             } else {
                 throw SequenceError{STR("Invalid ANSI escape sequence")};
             }

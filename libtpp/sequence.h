@@ -34,7 +34,7 @@ namespace tpp {
         char suffix() const { return suffix_; }
 
         int arg(size_t index, int defaultValue) const {
-            if (args_.size() >= index)
+            if (index >= args_.size())
                 return defaultValue;
             auto const & i = args_[index];
             return i.has_value() ? i.value() : defaultValue;
@@ -120,9 +120,41 @@ namespace tpp {
 
     /** OSCSequences
 
-        OSC sequences start with ESC ], followed by an optional integer. If a number is provides, it must be separated by ';' from the payload, which is a single string, terminated by either ST (ESC \) or a BEL. 
+        OSC sequences start with ESC ], followed by an optional integer. If a number is provided, it must be separated by ';' from the payload, which consists of semicolon separated strings. End of payload is signalled by either ST (ESC \) or a BEL. 
      */
     class OSCSequence {
+    public:
+        std::optional<int> id;
+        std::vector<std::string> values;
+
+        void prettyPrint(std::ostream & s) const {
+            s << "ESC ] ";
+            if (id.has_value())
+                s << id.value() << ";";
+            auto i = values.begin(), e = values.end();
+            if (i != e) {
+                s << *i++;
+                while (i != e)
+                    s << ';' << *i++;
+            }
+            s << " BEL";
+        }
+
+        friend std::ostream & operator << (std::ostream & s, OSCSequence const & seq) {
+            s << "\033]";
+            if (seq.id.has_value())
+                s << seq.id.value() << ";";
+            auto i = seq.values.begin(), e = seq.values.end();
+            if (i != e) {
+                s << *i++;
+                while (i != e)
+                    s << ';' << *i++;
+            }
+            s << '\b';
+            return s;
+        }
+
+        static std::optional<OSCSequence> Parse(char const * & buffer, char const * end); 
 
     }; // OSCSequence
 
@@ -163,6 +195,22 @@ namespace tpp {
             } \
         }; 
 
+    #define CSI2(SHORTHAND, NAME, SUFFIX, VALUE_NAME1, DEFAULT_VALUE1, VALUE_NAME2, DEFAULT_VALUE2) \
+        class NAME { \
+        public: \
+            static constexpr char Suffix = SUFFIX; \
+            int VALUE_NAME1; \
+            int VALUE_NAME2; \
+            NAME(CSISequence && seq) { \
+                if (seq.numArgs() > 2) \
+                    throw SequenceError{STR("Invalid number of arguments for for CSI sequence " << PRETTY(seq) << " when converting to SHORTHAND")}; \
+                if (seq.suffix() != Suffix) \
+                    throw SequenceError{STR("Invalid suffix for CSI sequence " << PRETTY(seq) << " when converting to SHORTHAND (suffix" << SUFFIX << ")")}; \
+                VALUE_NAME1 = seq.arg(0, DEFAULT_VALUE1); \
+                VALUE_NAME2 = seq.arg(1, DEFAULT_VALUE2); \
+            } \
+        }; 
+
     #define DEC(SHORTHAND, NAME, ID) \
         class NAME { \
         public: \
@@ -174,6 +222,37 @@ namespace tpp {
                     throw SequenceError{STR("Invalid id for DEC sequence " << PRETTY(seq) << " when converting to SHORTHAND (index " << Id << ")")}; \
             } \
         };
+
+    #define OSC1(SHORTHAND, NAME, ID, VALUE_NAME) \
+        class NAME { \
+        public: \
+            static constexpr int Id = ID; \
+            std::string VALUE_NAME; \
+            NAME(OSCSequence && seq) { \
+                if (seq.id.value() != Id) \
+                    throw SequenceError{STR("Invalid id for OSC sequence " << PRETTY(seq) << " when converting to SHORTHAND (index " << Id << ")")}; \
+                if (seq.values.size() != 1) \
+                    throw SequenceError{STR("Invalid number of arguments: " << PRETTY(seq) << " provides " << seq.values.size() << " but only 1 expected")}; \
+                VALUE_NAME = std::move(seq.values[0]); \
+            } \
+        };
+
+    #define OSC2(SHORTHAND, NAME, ID, VALUE_NAME1, VALUE_NAME2) \
+        class NAME { \
+        public: \
+            static constexpr int Id = ID; \
+            std::string VALUE_NAME1; \
+            std::string VALUE_NAME2; \
+            NAME(OSCSequence && seq) { \
+                if (seq.id.value() != Id) \
+                    throw SequenceError{STR("Invalid id for OSC sequence " << PRETTY(seq) << " when converting to SHORTHAND (index " << Id << ")")}; \
+                if (seq.values.size() != 2) \
+                    throw SequenceError{STR("Invalid number of arguments: " << PRETTY(seq) << " provides " << seq.values.size() << " but only 1 expected")}; \
+                VALUE_NAME1 = std::move(seq.values[0]); \
+                VALUE_NAME1 = std::move(seq.values[1]); \
+            } \
+        };
+
         
     #include "sequences.inc.h"
 
@@ -185,12 +264,15 @@ namespace tpp {
     using Sequence = std::variant<
         #define CSI0(_, NAME, ...) NAME,
         #define CSI1(_, NAME, ...) NAME, 
-        //#define CSI2(_, NAME, ...) NAME, 
+        #define CSI2(_, NAME, ...) NAME, 
         //#define CSIn(_, NAME, ...) NAME,
         #define DEC(_, NAME, ...) NAME, 
+        #define OSC1(_, NAME, ...) NAME, 
+        #define OSC2(_, NAME, ...) NAME,
         #include "sequences.inc.h"
         CSISequence,
-        DECSequence
+        DECSequence,
+        OSCSequence
     >;
 
     /** Parses the given buffer for a sequence. 
