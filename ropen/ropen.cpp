@@ -4,9 +4,7 @@
 #include "helpers/helpers.h"
 #include "helpers/helpers_pty.h"
 
-int main(int argc, char * argv[]) {
-    MARK_AS_UNUSED(argc);
-    MARK_AS_UNUSED(argv);
+int main([[maybe_unused]] int argc, [[maybe_unused]] char * argv[]) {
 
     return EXIT_SUCCESS;
 }
@@ -227,8 +225,7 @@ namespace tpp {
 
         static volatile bool Interrupted_;
 
-        static void SIGINT_handler(int signo) {
-            MARK_AS_UNUSED(signo);
+        static void SIGINT_handler([[maybe_unused]] int signo) {
             Interrupted_ = true;
         }
             

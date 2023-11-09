@@ -27,10 +27,6 @@ overloaded(Ts...) -> overloaded<Ts...>;
 
 #define ASSERT assert
 
-/** Marks given argument as unused so that the compiler will stop giving warnings about it when extra warnings are enabled. 
- */
-#define MARK_AS_UNUSED(ARG_NAME) (void)(ARG_NAME)
-
 #define NOT_IMPLEMENTED ASSERT(false && "Feature not implemented")
 
 /** OS Specific error. 

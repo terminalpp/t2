@@ -162,8 +162,7 @@ private:
     static inline char const RESIZE_EVENT = 1;
     static inline char const TERMINATE_EVENT = 2;
 
-    static void SIGWINCH_handler(int sig) { 
-        MARK_AS_UNUSED(sig);  
+    static void SIGWINCH_handler([[maybe_unused]] int sig) { 
         OSCHECK(::write(pipe_[1], & RESIZE_EVENT, 1) == 1);
     }
 

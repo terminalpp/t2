@@ -9,10 +9,6 @@
 #define STR(...) static_cast<std::stringstream &&>(std::stringstream() << __VA_ARGS__).str()
 #endif
 
-#if (! defined MARK_AS_UNUSED)
-#define MARK_AS_UNUSED(ARG_NAME) (void)(ARG_NAME)
-#endif
-
 /** \page helpersTests Tests
     \brief Unittests infrastructure. 
 
@@ -95,9 +91,7 @@ public:
 
     class Skip {}; // Test::Skip
 
-    static int RunAll(int argc, char * argv[]) {
-        MARK_AS_UNUSED(argc);
-        MARK_AS_UNUSED(argv);
+    static int RunAll([[maybe_unused]] int argc, [[maybe_unused]] char * argv[]) {
         // TODO actually implement logging, disabling test suites, etc. 
         size_t testIndex = 0;
         //std::cout << "Running " << TotalTests_ << " tests..." << std::flush;

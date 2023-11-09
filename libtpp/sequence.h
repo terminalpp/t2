@@ -105,7 +105,6 @@ namespace tpp {
         bool value; 
 
         void prettyPrint(std::ostream & s) const {
-            MARK_AS_UNUSED(s);
             NOT_IMPLEMENTED;
         }
 
