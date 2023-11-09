@@ -20,19 +20,23 @@ namespace tpp {
             while (true) {
                 if (x == end)
                     return std::nullopt;
-                if (*x == ';') {
-                    ++x;
-                    result.args_.push_back(std::nullopt);
-                } else if (isDecimalDigit(*x)) {
-                    int arg = 0;
+                std::optional<int> arg;
+                if (isDecimalDigit(*x)) {
+                    int value = 0;
                     do {
-                        arg = (arg * 10) + (*x - '0');
+                        value = (value * 10) + (*x - '0');
                         if (++x == end)
                             return std::nullopt;
                     } while (isDecimalDigit(*x));
+                    arg = value;
+                }
+                if (*x == ';') {
+                    ++x;
                     result.args_.push_back(arg);
+                // can be either unsupported parameter byte, unsupported intermediate bytes, or final byte, make sure we add the last argument if there was actually one (otherwise ars are only ever stored with semicolon separators) or extra separator                    
                 } else {
-                    // can be either unsupported parameter byte, unsupported intermediate bytes, or final bytes
+                    if (arg.has_value() || ! result.args_.empty())
+                        result.args_.push_back(arg);
                     break; 
                 }
             }

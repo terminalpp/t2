@@ -43,9 +43,10 @@ namespace tpp {
         /** Prettyprints the seuence in human readable form. 
          */
         void prettyPrint(std::ostream & s) const {
-            s << "ESC [ ";
+            s << "ESC [";
             auto i = args_.begin(), e = args_.end();
             if (i != e) {
+                s << ' ';
                 if (i->has_value())
                     s << i->value();
                 ++i;
@@ -56,13 +57,7 @@ namespace tpp {
                     ++i;
                 }
             }
-            s << suffix_;
-        }
-
-        std::string prettyPrint() const {
-            std::stringstream s;
-            prettyPrint(s);
-            return s.str();
+            s << ' ' << suffix_;
         }
 
         static std::optional<CSISequence> Parse(char const * & buffer, char const * end);
@@ -105,7 +100,7 @@ namespace tpp {
         bool value; 
 
         void prettyPrint(std::ostream & s) const {
-            NOT_IMPLEMENTED;
+            s << "ESC [ ? " << id << (value ? 'h' : 'l');
         }
 
         friend std::ostream & operator << (std::ostream & s, DECSequence seq) {

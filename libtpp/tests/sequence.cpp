@@ -64,6 +64,54 @@ TEST(CSISequence, ValidNoArgs) {
     EXPECT(x == buffer.c_str() + buffer.size() - 4); // test
 }
 
+TEST(CSISequence, ValidStuffAfter) {
+    std::string buffer{"\033[afoobar"};
+    char const * x = buffer.c_str();
+    auto r = CSISequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(STR(PRETTY(r.value())), "ESC [ a");
+    EXPECT(r->numArgs(), (size_t)0);
+    EXPECT(x == buffer.c_str() + 3);
+}
+
+TEST(CSISequence, MultipleArguments) {
+    std::string buffer{"\033[0;1;2;3afoobar"};
+    char const * x = buffer.c_str();
+    auto r = CSISequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(STR(PRETTY(r.value())), "ESC [ 0; 1; 2; 3 a");
+    EXPECT(STR(r.value()), "\033[0;1;2;3a");
+    EXPECT(r->numArgs(), (size_t)4);
+    EXPECT(x == buffer.c_str() + 10);
+}
+
+TEST(CSISequence, DefaultArguments) {
+    // first
+    std::string buffer{"\033[;1;2;3afoobar"};
+    char const * x = buffer.c_str();
+    auto r = CSISequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(STR(PRETTY(r.value())), "ESC [ ; 1; 2; 3 a");
+    EXPECT(r->numArgs(), (size_t)4);
+    EXPECT(x == buffer.c_str() + 9);
+    // middle
+    buffer = "\033[0;;2;3afoobar";
+    x = buffer.c_str();
+    r = CSISequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(STR(PRETTY(r.value())), "ESC [ 0; ; 2; 3 a");
+    EXPECT(r->numArgs(), (size_t)4);
+    EXPECT(x == buffer.c_str() + 9);
+    // last 
+    buffer = "\033[0;1;2;afoobar";
+    x = buffer.c_str();
+    r = CSISequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(STR(PRETTY(r.value())), "ESC [ 0; 1; 2;  a");
+    EXPECT(r->numArgs(), (size_t)4);
+    EXPECT(x == buffer.c_str() + 9);
+}
+
 TEST(CSISequence, CSI0Sequences) {
     #define CSI0(_, NAME, SUFFIX) { \
         std::string buffer{STR("\033[" << SUFFIX)}; \
