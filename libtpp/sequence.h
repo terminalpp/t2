@@ -14,7 +14,7 @@ namespace tpp {
         SequenceError(std::string const & what): std::runtime_error(what) {}
     }; // tpp::SequenceError
 
-    /** Generic CSI sequence. 
+    /** CSI sequence. 
      
         CSI Sequence is characterized by the prefix ESC [, followed by zero or more semicolon separated integers and terminated by a special character that determines the type of the sequence. This class is a generic representation of any such sequence. 
 
@@ -60,12 +60,6 @@ namespace tpp {
             s << ' ' << suffix_;
         }
 
-        static std::optional<CSISequence> Parse(char const * & buffer, char const * end);
-
-    private:
-        std::vector<std::optional<int>> args_;
-        char suffix_;
-
         friend std::ostream & operator << (std::ostream & s, CSISequence const & seq) {
             s << "\033[";
             auto i = seq.begin(), e = seq.end();
@@ -83,6 +77,12 @@ namespace tpp {
             s << seq.suffix();
             return s;
         }
+
+        static std::optional<CSISequence> Parse(char const * & buffer, char const * end);
+
+    private:
+        std::vector<std::optional<int>> args_;
+        char suffix_;
 
         static bool IsParameterByte(char c) { return c >= 0x30 && c <= 0x3f; }
         static bool IsIntermediateByte(char c) { return c >= 0x20 && c <= 0x2f; }
@@ -154,14 +154,103 @@ namespace tpp {
 
     /** Terminal++ Special Sequences
 
-        TppSequences encode the extra t++ features such as data transmission and terminal multiplexing features. They are sent using the Device Control String (DCS) sequence that starts with ESC P + and is terminated by the string terminator (ESC \).
+        TppSequences encode the extra t++ features such as data transmission and terminal multiplexing features. Terminal++ sequences hijack the existing Device Control Strings (DCS) escape sequences so that they will be ignored or passed through by non-compliant apps. 
 
-        The payload of a TPP sequence consists of an integer sequence number, followed by sequence payload, which is decoded based on the sequence kind itself (see details of the respective sequences for their encodings). In general, printable characters and readable representations are preferred. For binary data, non-printable characters (or a subset of those with reduced compatibility) can be quoted with '`' followed by a hexadecimal representation of the byte. '``' is the quote character itself. 
+        Each t++ sequence has the following form:
 
+            ESC P id + t payload ESC \
+
+        Where `id` is the identifier of the sequence transmitted and `payload` is the payload of the sequence. The Sequence identifier also describes the encoding used in the payload section, which generally should follow the DCS sequences, i.e. multiple strings separated by semicolons. 
+
+        Non-printable or semantically clashing payload bytes can be encoded using a simple scheme where a byte is encoded as backtick followed by a hexadecimal representation of the encoded byte. 
      */
     class TppSequence {
+    public:
+        int id;
+        std::vector<std::string> args;
+
+        void prettyPrint(std::ostream & s) const {
+            s << "ESC P " << id << 't';
+            auto i = args.begin(), e = args.end();
+            if (i != e) {
+                Encode(s, *i++);
+                while (i != e) {
+                    s << ';';
+                    Encode(s, *i++);
+                }
+            }
+            s << " ST";
+        }
+
+        friend std::ostream & operator << (std::ostream & s, TppSequence const & seq) {
+            s << "\033P" << seq.id << 't';
+            auto i = seq.args.begin(), e = seq.args.end();
+            if (i != e) {
+                Encode(s, *i++);
+                while (i != e) {
+                    s << ';';
+                    Encode(s, *i++);
+                }
+            }
+            s << "\033\\";
+            return s;
+        }
+
+        static std::optional<TppSequence> Parse(char const * & buffer, char const * end);
+        
+        static void Encode(std::ostream &s, std::string const & value);
+
+    protected:
+
+        #define TPP2(_, NAME, ...) friend class NAME;
+        #include "sequences.inc.h"
+
+        TppSequence(int id): id{id} {}
+
+        template<typename T>
+        static std::optional<T> parseArg(char const * & buffer, char const * end); 
 
     }; // TppSequence
+
+    template<>
+    inline std::optional<int> TppSequence::parseArg<int>(char const * & buffer, char const * end) {
+        int result = 0;
+        char const * & x = buffer;
+        while (true) {
+            if (x == end)
+                return std::nullopt;
+            if (isDecimalDigit(*x))
+                result = (result * 10) + (*(x++) - '0');
+            else
+                break;
+        }
+        buffer = x;
+        return result;
+    }
+
+    template<>
+    inline std::optional<std::string> TppSequence::parseArg<std::string>(char const * & buffer, char const * end) {
+        std::stringstream s;
+        char const * x = buffer;
+        while (x < end) {
+            if (*x == ';' || *x == '\033') {
+                buffer = x;
+                return s.str();
+            }
+            if (*x == '`') {
+                if (x + 2 >= end)
+                    break;
+                ++x;
+                char c = (hexToNibble(*x++) << 4);
+                c |= hexToNibble(*x++);
+                s << c;
+            } else {
+                s << *x++;
+            }
+
+        }
+        return std::nullopt;
+    }
 
     #define CSI0(SHORTHAND, NAME, SUFFIX) \
         class NAME { \
@@ -247,9 +336,16 @@ namespace tpp {
             } \
         };
 
+    #define TPP2(SHORTHAND, NAME, ID, VALUE_NAME1, VALUE_TYPE1, VALUE_NAME2, VALUE_TYPE2) \
+        class NAME { \
+        public: \
+            static constexpr int Id = ID; \
+            VALUE_TYPE1 VALUE_NAME1; \
+            VALUE_TYPE2 VALUE_NAME2; \
+            NAME(VALUE_TYPE1 VALUE_NAME1, VALUE_TYPE2 VALUE_NAME2): VALUE_NAME1{VALUE_NAME1}, VALUE_NAME2{VALUE_NAME2} {} \
+        }; 
         
     #include "sequences.inc.h"
-
 
     /** Union of all known sequences. 
      

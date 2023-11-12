@@ -5,6 +5,7 @@ using namespace tpp;
 
 int main() {
 
+    /*
     LocalPTY * pty = new LocalPTY();
 
     std::thread t([pty] () {
@@ -37,5 +38,6 @@ int main() {
     std::cout << "PTY finished\r" << std::endl;
     t.join();
     std::cout << "PTY terminator thread done" << std::endl;
+    */
     return EXIT_SUCCESS;
 }

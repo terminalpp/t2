@@ -31,6 +31,14 @@
 #define OSC2(...)
 #endif
 
+#ifndef TPP1
+#define TPP1(...)
+#endif
+
+#ifndef TPP2
+#define TPP2(...)
+#endif
+
 CSI1(CUU, CursorUp, 'A', value, 1)
 CSI1(CUD, CursorDown, 'B', value, 1)
 CSI1(CUF, CursorRight, 'C', value, 1)
@@ -90,6 +98,16 @@ OSC2(CLIPCOPY, SetClipboard, 52, bufferName, data)
 
 // TODO OSC112 cursor color reset
 
+
+
+
+
+
+
+/** Sent when terminal window size changes.
+ */
+TPP2(TERMRES, TerminalResize, 0, cols, int, rows, int)
+
 #undef CSI0
 #undef CSI1
 #undef CSI2
@@ -97,3 +115,5 @@ OSC2(CLIPCOPY, SetClipboard, 52, bufferName, data)
 #undef DEC
 #undef OSC1
 #undef OSC2
+#undef TPP1
+#undef TPP2

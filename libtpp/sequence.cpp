@@ -3,19 +3,32 @@
 
 namespace tpp {
 
+    namespace {
+
+        std::optional<bool> parseChar(char x, char const * & buffer, char const * end) {
+            if (buffer == end)
+                return std::nullopt;
+            return *buffer++ == x;
+        }
+
+        std::optional<bool> parseChar(char x, char const * & buffer, char const * end, char const * msg) {
+            if (buffer == end)
+                return std::nullopt;
+            if (*buffer != x)
+                throw SequenceError(STR(msg << ". " << PRETTY(*buffer) << " found instead"));
+            ++buffer;
+            return true;
+        }
+
+    } // tpp::anonymous
+
     std::optional<CSISequence> CSISequence::Parse(char const * & buffer, char const * end) {
         if (buffer == end)
             return std::nullopt;
         char const * x = buffer;
         try {
-            if (*x != '\033')
-                throw SequenceError{STR("Expected sequence start (\\033, ESC) but " << PRETTY(*x) << "found")}; 
-            ++x;
-            if (x == end)
-                return std::nullopt;
-            if (*x != '[')
-                throw SequenceError{STR("Expected CSI Sequence start ESC [, but ESC " << PRETTY(*x) << "found")};
-            ++x;
+            parseChar('\033', x, end, "Expected CSI sequence start (ESC [)").value();
+            parseChar('[', x, end, "Expected CSI sequence start (ESC [)").value();
             CSISequence result;
             while (true) {
                 if (x == end)
@@ -50,6 +63,8 @@ namespace tpp {
             }
             buffer = x;
             return result;
+        } catch (std::bad_optional_access const &) {
+            return std::nullopt;
         } catch (...) {
             buffer = x;
             throw;
@@ -61,19 +76,9 @@ namespace tpp {
             return std::nullopt;
         char const * x = buffer;
         try {
-            if (*x != '\033')
-                throw SequenceError{STR("Expected DEC sequence start (\\033, ESC) but " << PRETTY(*x) << "found")}; 
-            ++x;
-            if (x == end)
-                return std::nullopt;
-            if (*x != '[')
-                throw SequenceError{STR("Expected DEC Sequence start ESC [, but ESC " << PRETTY(*x) << "found")};
-            ++x;
-            if (x == end)
-                return std::nullopt;
-            if (*x != '?')
-                throw SequenceError{STR("Expected DEC Sequence start ESC [ ?, but ESC [ " << PRETTY(*x) << "found")};
-            ++x;
+            parseChar('\033', x, end, "Expected DEC sequence start (ESC [ ?)").value();
+            parseChar('[', x, end, "Expected DEC sequence start (ESC [ ?)").value();
+            parseChar('?', x, end, "Expected DEC sequence start (ESC [ ?)").value();
             int id = 0;
             bool idParsed = false;
             while (true) {
@@ -96,6 +101,8 @@ namespace tpp {
                 default:
                     throw SequenceError{STR("Dec sequence must end with 'h' or 'l', but  " << PRETTY(*x) << " found")};
             }                
+        } catch (std::bad_optional_access const &) {
+            return std::nullopt;
         } catch (...) {
             buffer = x;
             throw;
@@ -107,14 +114,8 @@ namespace tpp {
             return std::nullopt;
         char const * x = buffer;
         try {
-            if (*x != '\033')
-                throw SequenceError{STR("Expected OSC sequence start (\\033, ESC) but " << PRETTY(*x) << "found")}; 
-            ++x;
-            if (x == end)
-                return std::nullopt;
-            if (*x != ']')
-                throw SequenceError{STR("Expected OSC Sequence start ESC ], but ESC " << PRETTY(*x) << "found")};
-            ++x;
+            parseChar('\033', x, end, "Expected OSC sequence start (ESC ])").value();
+            parseChar(']', x, end, "Expected OSC sequence start (ESC ])").value();
             int id = 0;
             bool idParsed = false;
             while (true) {
@@ -161,9 +162,59 @@ namespace tpp {
                         break;
                 }
             }
+        } catch (std::bad_optional_access const &) {
+            return std::nullopt;
         } catch (...) {
             buffer = x;
             throw;
+        }
+    }
+
+    std::optional<TppSequence> TppSequence::Parse(char const * & buffer, char const * end) {
+        if (buffer == end)
+            return std::nullopt;
+        char const * x = buffer;
+        try {
+            parseChar('\033', x, end, "Expected DEC sequence start (ESC P)").value();
+            parseChar('P', x, end, "Expected DEC sequence start (ESC P)").value();
+            TppSequence res{parseArg<int>(x, end).value()};
+            parseChar('t', x, end, "Expected tpp sequence final character 't'").value();
+            // now parse the arguments, after each, we 
+            if (x == end)
+                return std::nullopt;
+            if (*x != '\033') {
+                while (true) {
+                    res.args.push_back(parseArg<std::string>(x, end).value());
+                    if (x == end)
+                        return std::nullopt;
+                    if (*x == ';') {
+                        ++x;
+                        continue;
+                    } else if (*x == '\033') {
+                        break;
+                    } else {
+                        throw SequenceError{STR("Invalid character in tpp sequence: " << PRETTY(*x))};
+                    }
+                }
+            }
+            ++x; // for ESC
+            parseChar('\\', x, end, "Expected ST (ESC \\)").value();
+            buffer = x;
+            return res;
+        } catch (std::bad_optional_access const &) {
+            return std::nullopt;
+        } catch (...) {
+            buffer = x;
+            throw;
+        }
+    }
+
+    void TppSequence::Encode(std::ostream & s, std::string const & value) {
+        for (char c : value) {
+            if (!isPrintableCharacter(c) || c == ';' || c == '`')
+                s << '`' << nibbleToHex(c >> 4) << nibbleToHex(c & 0xf);
+            else
+                s << c;
         }
     }
 
@@ -180,6 +231,8 @@ namespace tpp {
                         default:
                             return seq.value();
                     }
+                } else if (buffer[2] == 'P') {
+                    NOT_IMPLEMENTED; // TppSequence
                 } else {
                     auto seq = CSISequence::Parse(buffer, end);
                     if (!seq.has_value())

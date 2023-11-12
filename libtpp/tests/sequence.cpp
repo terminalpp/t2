@@ -209,3 +209,53 @@ TEST(OSCSequence, OSC2Sequences) {
     }
     #include "libtpp/sequences.inc.h"
 }
+
+
+TEST(TPPSequence, GenericNoArgs) {
+    std::string buffer{"\033P56t\033\\"};
+    char const * x = buffer.c_str();
+    auto r = TppSequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(x, buffer.c_str() + buffer.size());
+    EXPECT(r->id, 56);
+    EXPECT(r->args.empty());
+    buffer = "\033P12t\033\\foobar";
+    x = buffer.c_str();
+    r = TppSequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(x, buffer.c_str() + 7);
+    EXPECT(r->id, 12);
+    EXPECT(r->args.empty());
+}
+
+TEST(TPPSequence, Incomplete) {
+    std::string buffer{"\033P56"};
+    char const * x = buffer.c_str();
+    auto r = TppSequence::Parse(x, x + buffer.size());
+    EXPECT(!r.has_value());
+    EXPECT(x, buffer.c_str());
+    buffer = "\033P12t\033";
+    x = buffer.c_str();
+    r = TppSequence::Parse(x, x + buffer.size());
+    EXPECT(!r.has_value());
+    EXPECT(x, buffer);
+    buffer = "\033";
+    x = buffer.c_str();
+    r = TppSequence::Parse(x, x + buffer.size());
+    EXPECT(!r.has_value());
+    EXPECT(x, buffer);
+}
+
+TEST(TPPSequence, Arguments) {
+    std::string buffer{"\033P56tfoo;bar\033\\"};
+    char const * x = buffer.c_str();
+    auto r = TppSequence::Parse(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(x, buffer.c_str() + buffer.size());
+    EXPECT(r->id, 56);
+    EXPECT(r->args.size() == 2);
+    EXPECT(r->args[0] == "foo");
+    EXPECT(r->args[1] == "bar");
+}
+
+

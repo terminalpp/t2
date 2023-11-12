@@ -59,3 +59,22 @@ public:
 
 
 inline bool isDecimalDigit(char c) { return c >= '0' && c <= '9'; }
+
+inline bool isPrintableCharacter(char c) { return c >= 32 && c < 127; }
+
+inline char nibbleToHex(uint8_t x) {
+    if (x < 10)
+        return '0' + x;
+    ASSERT(x < 16);
+    return 'a' - 10 + x;
+}
+
+inline uint8_t hexToNibble(char c) {
+    if (c >= '0' && c <= '9')
+        return static_cast<uint8_t>(c - '0');
+    if (c >= 'a' && c <= 'f')
+        return static_cast<uint8_t>((c - 'a') + 10);
+    if (c >= 'A' && c <= 'F')
+        return static_cast<uint8_t>((c - 'A') + 10);
+    throw std::invalid_argument{STR("Invalid hexadecimal character " << c)};    
+}
