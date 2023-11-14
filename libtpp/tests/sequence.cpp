@@ -259,3 +259,14 @@ TEST(TPPSequence, Arguments) {
 }
 
 
+
+
+
+TEST(TPPSequence, Resize) {
+    std::string buffer{"\033P0t0;0\033\\"};
+    char const * x = buffer.c_str();
+    auto r = ParseSequence(x, x + buffer.size());
+    EXPECT(r.has_value());
+    EXPECT(x, buffer.c_str() + buffer.size());
+    EXPECT(std::holds_alternative<TerminalResize>(r.value()));
+}

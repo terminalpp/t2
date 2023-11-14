@@ -209,13 +209,15 @@ namespace tpp {
 
         template<typename T>
         static std::optional<T> parseArg(char const * & buffer, char const * end); 
+        static std::optional<bool> parseSeparator(char const * & buffer, char const * end);
+        static std::optional<bool> parseEnd(char const * & buffer, char const * end);
 
     }; // TppSequence
 
     template<>
     inline std::optional<int> TppSequence::parseArg<int>(char const * & buffer, char const * end) {
         int result = 0;
-        char const * & x = buffer;
+        char const * x = buffer;
         while (true) {
             if (x == end)
                 return std::nullopt;
@@ -343,6 +345,22 @@ namespace tpp {
             VALUE_TYPE1 VALUE_NAME1; \
             VALUE_TYPE2 VALUE_NAME2; \
             NAME(VALUE_TYPE1 VALUE_NAME1, VALUE_TYPE2 VALUE_NAME2): VALUE_NAME1{VALUE_NAME1}, VALUE_NAME2{VALUE_NAME2} {} \
+            static std::optional<NAME> parseBody(char const * & buffer, char const * end) { \
+                char const * x = buffer; \
+                try { \
+                    auto first{TppSequence::parseArg<VALUE_TYPE1>(x, end).value()}; \
+                    TppSequence::parseSeparator(x, end).value(); \
+                    auto second{TppSequence::parseArg<VALUE_TYPE2>(x, end).value()}; \
+                    TppSequence::parseEnd(x, end).value(); \
+                    buffer = x; \
+                    return NAME{first, second}; \
+                } catch (std::bad_optional_access const &) { \
+                    return std::nullopt; \
+                } catch (...) { \
+                    buffer = x; \
+                    throw; \
+                } \
+            } \
         }; 
         
     #include "sequences.inc.h"
@@ -359,10 +377,12 @@ namespace tpp {
         #define DEC(_, NAME, ...) NAME, 
         #define OSC1(_, NAME, ...) NAME, 
         #define OSC2(_, NAME, ...) NAME,
+        #define TPP2(_, NAME, ...) NAME, 
         #include "sequences.inc.h"
         CSISequence,
         DECSequence,
-        OSCSequence
+        OSCSequence,
+        TppSequence
     >;
 
     /** Parses the given buffer for a sequence. 

@@ -20,6 +20,21 @@ namespace tpp {
             return true;
         }
 
+        std::optional<int> parseInt(char const * & buffer, char const * end) {
+            int result = 0;
+            char const * x = buffer;
+            while (true) {
+                if (x >= end)
+                    return std::nullopt;
+                if (isDecimalDigit(*x))
+                result = (result * 10) + (*(x++) - '0');
+            else
+                break;
+            }
+            buffer = x;
+            return result;
+        }
+
     } // tpp::anonymous
 
     std::optional<CSISequence> CSISequence::Parse(char const * & buffer, char const * end) {
@@ -218,6 +233,25 @@ namespace tpp {
         }
     }
 
+    std::optional<bool> TppSequence::parseSeparator(char const * & buffer, char const * end) {
+        return parseChar(';', buffer, end, "Expected tpp sequence rgument separator ';'");
+    }
+
+    std::optional<bool> TppSequence::parseEnd(char const * & buffer, char const * end) {
+        char const * x = buffer;
+        try {
+            parseChar('\033', x, end, "Expected tpp sequence end (ESC \\)").value();
+            parseChar('\\', x, end, "Expected tpp sequence end (ESC \\)").value();
+            buffer = x;
+            return true;
+        } catch (std::bad_optional_access const &) {
+            return std::nullopt;
+        } catch (...) {
+            buffer = x;
+            throw;
+        }
+    }
+
     std::optional<Sequence> ParseSequence(char const * & buffer, char const * end) {
         if (buffer + 3 <= end) {
             if (buffer[1] == '[') {
@@ -231,8 +265,6 @@ namespace tpp {
                         default:
                             return seq.value();
                     }
-                } else if (buffer[2] == 'P') {
-                    NOT_IMPLEMENTED; // TppSequence
                 } else {
                     auto seq = CSISequence::Parse(buffer, end);
                     if (!seq.has_value())
@@ -260,6 +292,28 @@ namespace tpp {
                     }
                 }
                 return seq.value();
+            } else if (buffer[1] == 'P') {
+                char const * x = buffer + 2;
+                try {
+                    int id = parseInt(x, end).value();
+                    parseChar('t', x, end, "Expected TPP final byte 't'").value();
+                    std::optional<Sequence> result;
+                    switch (id) {
+                        #define TPP2(_, NAME, ...) case NAME::Id: result = NAME::parseBody(x, end); break;
+                        #include "sequences.inc.h"
+                        default:
+                            result = TppSequence::Parse(x, end).value();
+                            break;
+                    }
+                    if (result.has_value())
+                        buffer = x;
+                    return result;
+                } catch (std::bad_optional_access const &) {
+                    return std::nullopt;
+                } catch (...) {
+                    buffer = x;
+                    throw;
+                }
             } else {
                 throw SequenceError{STR("Invalid ANSI escape sequence")};
             }
