@@ -23,71 +23,66 @@
 
 #include "helpers/helpers.h"
 
-namespace tpp {
-    namespace pty {
+namespace tpp::pty {
 
-        /** Pseudoterminal window size. Described in number of rows and columns per row. 
-         */
-        struct Size {
-            int cols;
-            int rows;
-        }; // tpp::pty::Size
 
-        /** A pseudoterminal endpoint that simply defines API for both sending and receiving data to and from the pseudoterminal. 
-         */
-        class Endpoint {
-        public:
-            virtual ~Endpoint();
-            virtual void send(char const * buffer, size_t numBytes) = 0;
-            virtual size_t receive(char * buffer, size_t bufferLength) = 0;
-            virtual Size size() const = 0;
-        }; // tpp::pty::Endpoint
+    /** A pseudoterminal endpoint that simply defines API for both sending and receiving data to and from the pseudoterminal. 
+     */
+    class PTY {
+    public:
+        virtual ~PTY() = default;
+        virtual void send(char const * buffer, size_t numBytes) = 0;
+        virtual size_t receive(char * buffer, size_t bufferLength) = 0;
+    }; // tpp::pty::PTY
 
-        /** Local pseudoterminal client (app). 
-         
-            Encapsulates pseudoterminal connection via the standard operating system mode, such as the stdin file and terminal resize signal on Linux. 
-         */
-        class LocalClient : public Endpoint {
+    /** Local pseudoterminal client (app). 
+     
+        Encapsulates pseudoterminal connection via the standard operating system mode, such as the stdin file and terminal resize signal on Linux. 
+        */
+    class LocalClient : public PTY {
 #if (defined ARCH_UNIX)
-        public:
+    public:
 
-            LocalClient();
-            ~LocalClient() override;
+        LocalClient();
+        ~LocalClient() override;
 
-            void send(char const * buffer, size_t numBytes) override {
-                OSCHECK(::write(STDOUT_FILENO, buffer, numBytes) == static_cast<int>(numBytes));
-            }
+        LocalClient(LocalClient const & ) = delete;
 
-            size_t receive(char * buffer, size_t bufferLength) override;
+        void send(char const * buffer, size_t numBytes) override {
+            OSCHECK(::write(STDOUT_FILENO, buffer, numBytes) == static_cast<int>(numBytes));
+        }
 
-            Size size() const override {
-                winsize size;
-                OSCHECK(ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) != -1);
-                return Size{size.ws_col, size.ws_row};
-            }
+        size_t receive(char * buffer, size_t bufferLength) override;
 
-            /** Check if the current process is running inside a tmux. 
-             */
-            static bool InsideTmux() {
-                return getenv("TMUX") != nullptr;
-            }
+        /** Returns the size of the terminal in columns and rows by querying the STDIN ioctls.
+         */
+        std::pair<int, int> size() const {
+            winsize size;
+            OSCHECK(ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) != -1);
+            return std::make_pair(size.ws_col, size.ws_row);
+        }
 
-        private:
+        /** Check if the current process is running inside a tmux. 
+         */
+        static bool InsideTmux() {
+            return getenv("TMUX") != nullptr;
+        }
 
-            static inline char const RESIZE_EVENT = 1;
-            static inline char const TERMINATE_EVENT = 2;
+    private:
 
-            static void SIGWINCH_handler([[maybe_unused]] int sig) { 
-                OSCHECK(::write(pipe_[1], & RESIZE_EVENT, 1) == 1);
-            }
+        static inline char const RESIZE_EVENT = 1;
+        static inline char const TERMINATE_EVENT = 2;
 
-            /** Backup terminal settings to be restored when the local PTY is destroyed. 
-             */
-            static inline termios backup_;
+        static void SIGWINCH_handler([[maybe_unused]] int sig) { 
+            OSCHECK(::write(pipe_[1], & RESIZE_EVENT, 1) == 1);
+        }
 
-            static inline int pipe_[2] = {0,0};
+        /** Backup terminal settings to be restored when the local PTY is destroyed. 
+         */
+        static inline termios backup_;
+
+        static inline int pipe_[2] = {0,0};
 #endif // ARCH_UNIX
-        }; // tpp::pty::LocalClient
+    }; // tpp::pty::LocalClient
 
-    } // namespace pty::tpp
-} // namespace tpp
+} // namespace tpp::pty

@@ -7,11 +7,14 @@
 #include "helpers/helpers.h"
 #include "helpers/helpers_pretty.h"
 
+#include "reader.h"
+
 namespace tpp {
+
 
     class SequenceError : public std::runtime_error {
     public:
-        SequenceError(std::string const & what): std::runtime_error(what) {}
+        SequenceError(std::string const & what): std::runtime_error{what} {}
     }; // tpp::SequenceError
 
     /** CSI sequence. 
@@ -79,6 +82,13 @@ namespace tpp {
         }
 
         static std::optional<CSISequence> Parse(char const * & buffer, char const * end);
+
+        template<typename T>
+        static std::optional<CSISequence> Parse(T const & reader) {
+            try {
+
+            } catch (Reader::EOF)
+        }
 
     private:
         std::vector<std::optional<int>> args_;
@@ -382,7 +392,8 @@ namespace tpp {
         CSISequence,
         DECSequence,
         OSCSequence,
-        TppSequence
+        TppSequence,
+        std::string
     >;
 
     /** Parses the given buffer for a sequence. 
